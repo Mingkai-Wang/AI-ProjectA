@@ -5,7 +5,8 @@ Created on Wed Feb  5 17:28:47 2025
 
 @author: mingkaiwang
 """
-from flask import Flask, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, current_app
+from flask_login import login_required
 import json
 import os
 import signal
@@ -14,41 +15,46 @@ from datetime import datetime
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
+support_bp = Blueprint('support_bp', __name__)
 
-# 配置Google Gemini
+# Configure Google Gemini
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-genai.configure(api_key=GEMINI_API_KEY)
+if not GEMINI_API_KEY:
+    print("Error: GEMINI_API_KEY environment variable not set")
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
+    # Create Gemini model instance
+    model = genai.GenerativeModel('gemini-pro')
 
-# 创建Gemini模型实例
-model = genai.GenerativeModel('gemini-pro')
-
-# 配置文件路径
+# Configure file path
 HISTORY_FILE = "question_history.json"
 
 def load_history():
-    """从文件加载历史记录"""
+    """Load history from file"""
     try:
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
+        return []
     except Exception as e:
-        print(f"加载历史记录失败: {str(e)}")
-    return []
+        print(f"Failed to load history: {str(e)}")
+        return []
 
 def save_history(history):
-    """保存历史记录到文件"""
+    """Save history to file"""
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
+        return True
     except Exception as e:
-        print(f"保存历史记录失败: {str(e)}")
+        print(f"Failed to save history: {str(e)}")
+        return False
 
 def release_port(port=5102):
-    """释放指定端口，防止'Address Already in Use'错误"""
+    """Release specified port to prevent 'Address Already in Use' error"""
     try:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
@@ -57,82 +63,118 @@ def release_port(port=5102):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception as e:
-        print(f"释放端口失败: {str(e)}")
+        print(f"Failed to release port: {str(e)}")
 
-# 在启动前释放端口
+# Release port before starting
 release_port(5102)
 
-# 加载历史记录
+# Load history
 question_history = load_history()
 
-# 系统提示词
-SYSTEM_PROMPT = """你是一个专业的客服助手，负责回答用户关于公司服务的问题。请注意：
-1. 保持专业、友好的语气
-2. 回答要简洁明了
-3. 如果不确定的信息，要诚实告知
-4. 涉及具体价格或特殊服务时，建议用户联系人工客服
-5. 使用礼貌用语，如"您"而不是"你"
-6. 回答要有条理，重点突出
-7. 如果用户问题不清楚，可以请求澄清
+# System prompt
+SYSTEM_PROMPT = """You are a professional customer service assistant responsible for answering questions about company services. Please note:
+1. Maintain a professional and friendly tone
+2. Keep answers concise and clear
+3. Be honest about uncertain information
+4. For specific prices or special services, suggest contacting human customer service
+5. Use polite language
+6. Structure answers with clear focus points
+7. Ask for clarification if user questions are unclear
 
-公司基本信息：
-- 工作时间：每个工作日上午9点到下午6点
-- 地址：中央商务区
-- 联系方式：电话 400-888-8888，邮箱 support@example.com
-- 支持多种支付方式：银行转账、支付宝和微信支付
+Company Information:
+- Working Hours: 9 AM to 6 PM on weekdays
+- Address: Central Business District
+- Contact: Phone 400-888-8888, Email support@example.com
+- Payment Methods: Bank Transfer, PayPal, and Credit Cards
 """
 
-@app.route("/")
+@support_bp.route("/")
+@login_required
 def index():
-    """渲染聊天机器人界面"""
+    """Render chat bot interface"""
     return render_template("support.html")
 
-@app.route("/get_history")
+@support_bp.route("/get_history")
+@login_required
 def get_history():
-    """获取历史记录"""
-    return jsonify({"history": question_history})
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    """处理用户消息并使用Gemini API提供回复"""
+    """Get chat history"""
     try:
-        user_message = request.json.get("message", "").strip()
+        history = load_history()
+        return jsonify({"success": True, "history": history})
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": f"Failed to load history: {str(e)}"
+        }), 500
+
+@support_bp.route("/chat", methods=["POST"])
+@login_required
+def chat():
+    """Handle user messages and provide responses using Gemini API"""
+    try:
+        if not request.is_json:
+            return jsonify({
+                "success": False,
+                "error": "Invalid request format, JSON required"
+            }), 400
+
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({
+                "success": False,
+                "error": "Message cannot be empty"
+            }), 400
+
+        user_message = data['message'].strip()
         if not user_message:
-            return jsonify({"error": "消息不能为空"}), 400
+            return jsonify({
+                "success": False,
+                "error": "Message cannot be empty"
+            }), 400
+
+        if not GEMINI_API_KEY:
+            return jsonify({
+                "success": False,
+                "error": "System configuration error: API key not set"
+            }), 500
 
         try:
-            # 创建对话上下文
+            # Create chat context
             chat = model.start_chat(history=[])
-            # 发送系统提示词和用户消息
-            response = chat.send_message(f"{SYSTEM_PROMPT}\n\n用户问题：{user_message}")
+            # Send system prompt and user message
+            response = chat.send_message(f"{SYSTEM_PROMPT}\n\nUser Question: {user_message}")
             bot_reply = response.text
 
-            # 记录问题
-            question_history.append({
+            # Record question
+            new_history_item = {
                 "question": user_message,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            })
+            }
+            question_history.append(new_history_item)
             save_history(question_history)
 
             return jsonify({
+                "success": True,
                 "response": bot_reply,
                 "history": question_history
             })
 
         except Exception as e:
-            print(f"Gemini API 错误: {str(e)}")
+            print(f"Gemini API Error: {str(e)}")
             return jsonify({
-                "error": "抱歉，系统暂时无法处理您的请求，请稍后再试。"
+                "success": False,
+                "error": f"AI response generation failed: {str(e)}"
             }), 500
 
     except Exception as e:
         return jsonify({
-            "error": f"处理请求时发生错误: {str(e)}"
+            "success": False,
+            "error": f"Request processing error: {str(e)}"
         }), 500
 
 if __name__ == "__main__":
     if not GEMINI_API_KEY:
-        print("错误：未设置GEMINI_API_KEY环境变量")
+        print("Error: GEMINI_API_KEY environment variable not set")
         exit(1)
-    app.run(debug=True, port=5102)
+    current_app.run(debug=True, port=5102)
 

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能理财助手</title>
+    <title>AI Financial Advisor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -123,96 +123,145 @@
             white-space: pre-wrap;
             line-height: 1.5;
         }
+
+        .result-card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-header {
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .summary-item .label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .summary-item .value {
+            font-size: 1.1em;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+
+        .detailed-plan {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>AI 智能理财助手</h1>
+        <h1>AI Financial Advisor</h1>
 
-        <!-- 用户画像部分 -->
+        <!-- Profile Analysis Section -->
         <div class="section" id="profile-section">
-            <h2>个人画像分析</h2>
+            <h2>Personal Profile Analysis</h2>
             <div id="questions-container"></div>
             <form id="profile-form">
                 <div class="form-group">
-                    <label for="age">年龄</label>
+                    <label for="age">Age</label>
                     <input type="number" id="age" name="age" required>
                 </div>
                 <div class="form-group">
-                    <label for="occupation">职业</label>
+                    <label for="occupation">Occupation</label>
                     <input type="text" id="occupation" name="occupation" required>
                 </div>
                 <div class="form-group">
-                    <label for="monthly_income">月收入</label>
+                    <label for="monthly_income">Monthly Income</label>
                     <input type="number" id="monthly_income" name="monthly_income" required>
                 </div>
                 <div class="form-group">
-                    <label for="monthly_expenses">月支出</label>
+                    <label for="monthly_expenses">Monthly Expenses</label>
                     <input type="number" id="monthly_expenses" name="monthly_expenses" required>
                 </div>
                 <div class="form-group">
-                    <label for="assets">资产状况</label>
+                    <label for="assets">Assets</label>
                     <textarea id="assets" name="assets" required></textarea>
                 </div>
                 <div class="form-group">
-                    <label for="risk_preference">风险偏好</label>
+                    <label for="risk_preference">Risk Preference</label>
                     <textarea id="risk_preference" name="risk_preference" 
-                        placeholder="请详细描述您的投资风险承受能力，例如：对于亏损的态度、期望的收益率、投资经验等" 
+                        placeholder="Please describe your investment risk tolerance, including: attitude towards losses, expected returns, investment experience, etc." 
                         required></textarea>
                 </div>
-                <button type="submit">生成分析</button>
+                <button type="submit">Generate Analysis</button>
             </form>
-            <div class="loading" id="profile-loading">分析中...</div>
+            <div class="loading" id="profile-loading">Analyzing...</div>
             <div class="response" id="profile-response"></div>
         </div>
 
-        <!-- AI 对话部分 -->
+        <!-- AI Chat Section -->
         <div class="section">
-            <h2>智能咨询</h2>
+            <h2>AI Consultation</h2>
             <div class="form-group">
-                <label for="chat-input">请输入您的问题：</label>
+                <label for="chat-input">Enter your question:</label>
                 <textarea id="chat-input" rows="3"></textarea>
             </div>
-            <button onclick="sendMessage()">发送</button>
-            <div class="loading" id="chat-loading">AI思考中...</div>
+            <button onclick="sendMessage()">Send</button>
+            <div class="loading" id="chat-loading">AI thinking...</div>
             <div class="response" id="chat-response"></div>
         </div>
 
-        <!-- 理财方案模拟 -->
+        <!-- Investment Simulation -->
         <div class="section">
-            <h2>投资收益模拟</h2>
+            <h2>Investment Simulation</h2>
+            <div class="error" id="simulation-error" style="display: none;"></div>
             <form id="simulation-form">
                 <div class="form-group">
-                    <label for="initial_amount">初始投资金额</label>
-                    <input type="number" id="initial_amount" name="initial_amount" required>
+                    <label for="initial_amount">Initial Investment Amount ($)</label>
+                    <input type="number" id="initial_amount" name="initial_amount" min="0" step="1000" required>
                 </div>
                 <div class="form-group">
-                    <label for="annual_rate">预期年化收益率(%)</label>
-                    <input type="number" id="annual_rate" name="annual_rate" step="0.1" required>
+                    <label for="annual_rate">Expected Annual Return Rate (%)</label>
+                    <input type="number" id="annual_rate" name="annual_rate" min="0" max="100" step="0.1" required>
                 </div>
                 <div class="form-group">
-                    <label for="years">投资年限</label>
-                    <input type="number" id="years" name="years" required>
+                    <label for="years">Investment Period (Years)</label>
+                    <input type="number" id="years" name="years" min="1" max="50" required>
                 </div>
-                <button type="submit">计算模拟</button>
+                <button type="submit">Generate Investment Plan</button>
             </form>
-            <div class="loading" id="simulation-loading">计算分析中...</div>
-            <div class="response" id="simulation-response"></div>
+            <div class="loading" id="simulation-loading">Generating investment plan...</div>
+            <div id="simulation-response"></div>
         </div>
     </div>
 
     <script>
-        // 通用函数：显示加载状态
+        // Common Functions
         function showLoading(loadingId) {
             document.getElementById(loadingId).style.display = 'block';
         }
 
-        // 通用函数：隐藏加载状态
         function hideLoading(loadingId) {
             document.getElementById(loadingId).style.display = 'none';
         }
 
-        // 通用函数：处理API请求
+        // API Request Handler
         async function makeRequest(url, data, loadingId, responseId) {
             showLoading(loadingId);
             try {
@@ -220,86 +269,136 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(data)
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                const contentType = response.headers.get('Content-Type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Server returned non-JSON response');
                 }
                 
                 const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.message || `HTTP error! status: ${response.status}`);
+                }
+                
                 if (!result.success) {
-                    throw new Error(result.message || '请求失败');
+                    throw new Error(result.message || 'Request failed');
+                }
+                
+                if (!result.data) {
+                    throw new Error('Invalid response format');
                 }
                 
                 formatResponse(result.data, responseId);
             } catch (error) {
+                console.error('Request error:', error);
                 document.getElementById(responseId).innerHTML = 
-                    `<div class="error">错误：${error.message}</div>`;
+                    `<div class="error">Error: ${error.message}</div>`;
             } finally {
                 hideLoading(loadingId);
             }
         }
 
-        // 获取用户画像问题
+        // Get Profile Questions
         async function getProfileQuestions() {
             try {
-                const response = await fetch('/profile/questions');
+                const response = await fetch('/engagement/profile/questions');
                 const result = await response.json();
                 if (result.success && result.data.questions) {
                     const container = document.getElementById('questions-container');
-                    container.innerHTML = '<h3>请回答以下问题：</h3>' + 
+                    container.innerHTML = '<h3>Please answer the following questions:</h3>' + 
                         result.data.questions.map(q => `<p>${q}</p>`).join('');
                 }
             } catch (error) {
-                console.error('获取问题失败：', error);
+                console.error('Failed to get questions:', error);
             }
         }
 
-        // 优化响应展示格式
+        // Format Response
         function formatResponse(data, responseId) {
             const container = document.getElementById(responseId);
             
             if (responseId === 'chat-response') {
-                // 聊天消息格式化
+                // Format chat message
                 const message = document.createElement('div');
                 message.className = 'chat-message ai-message';
                 message.textContent = data.response;
                 container.appendChild(message);
                 container.scrollTop = container.scrollHeight;
+            } else if (responseId === 'simulation-response') {
+                // Format investment simulation result
+                const result = document.createElement('div');
+                result.className = 'result-card';
+                
+                const header = document.createElement('div');
+                header.className = 'result-header';
+                header.textContent = 'Investment Plan Analysis';
+                result.appendChild(header);
+                
+                const summary = document.createElement('div');
+                summary.className = 'result-summary';
+                
+                const summaryItems = [
+                    { label: 'Initial Investment', value: `$${data.initial_investment.toLocaleString()}` },
+                    { label: 'Annual Return Rate', value: `${data.annual_return_rate}%` },
+                    { label: 'Investment Period', value: `${data.investment_period} years` },
+                    { label: 'Monthly Investment', value: `$${data.monthly_investment.toLocaleString()}` },
+                    { label: 'Projected Final Amount', value: `$${data.projected_final_amount.toLocaleString()}` }
+                ];
+                
+                summaryItems.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'summary-item';
+                    div.innerHTML = `
+                        <div class="label">${item.label}</div>
+                        <div class="value">${item.value}</div>
+                    `;
+                    summary.appendChild(div);
+                });
+                
+                result.appendChild(summary);
+                
+                const plan = document.createElement('div');
+                plan.className = 'detailed-plan';
+                plan.textContent = data.detailed_plan;
+                result.appendChild(plan);
+                
+                container.innerHTML = '';
+                container.appendChild(result);
             } else {
-                // 其他响应格式化
-                container.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                container.innerHTML = `<div class="analysis-content">${data.analysis || JSON.stringify(data, null, 2)}</div>`;
             }
         }
 
-        // 添加输入验证
+        // Form Validation
         function validateForm(formData) {
             const errors = [];
             
             if (formData.age && (formData.age < 0 || formData.age > 120)) {
-                errors.push('年龄必须在 0-120 之间');
+                errors.push('Age must be between 0 and 120');
             }
             
             if (formData.monthly_income && formData.monthly_income < 0) {
-                errors.push('月收入不能为负数');
+                errors.push('Monthly income cannot be negative');
             }
             
             if (formData.monthly_expenses && formData.monthly_expenses < 0) {
-                errors.push('月支出不能为负数');
+                errors.push('Monthly expenses cannot be negative');
             }
             
             return errors;
         }
 
-        // 修改表单提交处理
+        // Form Submission Handler
         document.getElementById('profile-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
             
-            // 添加数据类型转换
             data.age = parseInt(data.age);
             data.monthly_income = parseFloat(data.monthly_income);
             data.monthly_expenses = parseFloat(data.monthly_expenses);
@@ -313,45 +412,53 @@
             
             try {
                 showLoading('profile-loading');
-                const response = await fetch('/profile', {
+                const response = await fetch('/engagement/profile', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(data)
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const result = await response.json();
+                
                 if (!result.success) {
-                    throw new Error(result.message || '请求失败');
+                    throw new Error(result.message || 'Analysis generation failed');
                 }
                 
                 const responseDiv = document.getElementById('profile-response');
-                responseDiv.innerHTML = `
-                    <h3>分析结果：</h3>
-                    <div class="analysis-content">
-                        ${result.data.analysis.replace(/\n/g, '<br>')}
-                    </div>
-                `;
+                if (result.data && result.data.analysis) {
+                    responseDiv.innerHTML = `
+                        <h3>Analysis Result:</h3>
+                        <div class="analysis-content">
+                            ${result.data.analysis.replace(/\n/g, '<br>')}
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Invalid response format');
+                }
                 
             } catch (error) {
+                console.error('Error:', error);
                 document.getElementById('profile-response').innerHTML = 
-                    `<div class="error">错误：${error.message}</div>`;
+                    `<div class="error">Error: ${error.message}</div>`;
             } finally {
                 hideLoading('profile-loading');
             }
         });
 
-        // 发送聊天消息
+        // Send Chat Message
         async function sendMessage() {
             const message = document.getElementById('chat-input').value;
             if (!message.trim()) return;
             
-            await makeRequest('/chat', {
+            const userMessage = document.createElement('div');
+            userMessage.className = 'chat-message user-message';
+            userMessage.textContent = message;
+            document.getElementById('chat-response').appendChild(userMessage);
+            
+            await makeRequest('/engagement/chat', {
                 message: message,
                 conversation_history: document.getElementById('chat-response').textContent
             }, 'chat-loading', 'chat-response');
@@ -359,15 +466,65 @@
             document.getElementById('chat-input').value = '';
         }
 
-        // 提交模拟计算表单
+        // Investment Simulation Form Handler
         document.getElementById('simulation-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
-            await makeRequest('/simulation', data, 'simulation-loading', 'simulation-response');
+            
+            const initial_amount = parseFloat(data.initial_amount);
+            const annual_rate = parseFloat(data.annual_rate);
+            const years = parseInt(data.years);
+            
+            const errorDiv = document.getElementById('simulation-error');
+            errorDiv.style.display = 'none';
+            
+            if (initial_amount <= 0) {
+                errorDiv.textContent = 'Investment amount must be greater than 0';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (annual_rate < 0 || annual_rate > 100) {
+                errorDiv.textContent = 'Annual return rate must be between 0-100%';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (years < 1 || years > 50) {
+                errorDiv.textContent = 'Investment period must be between 1-50 years';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                showLoading('simulation-loading');
+                const response = await fetch('/engagement/simulation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || 'Failed to generate investment plan');
+                }
+                
+                formatResponse(result.data, 'simulation-response');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('simulation-response').innerHTML = 
+                    `<div class="error">Error: ${error.message}</div>`;
+            } finally {
+                hideLoading('simulation-loading');
+            }
         });
 
-        // 页面加载时获取问题列表
+        // Load questions when page loads
         document.addEventListener('DOMContentLoaded', getProfileQuestions);
     </script>
 </body>

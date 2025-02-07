@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能客服系统</title>
+    <title>AI Customer Service</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: "Microsoft YaHei", Arial, sans-serif;
+            font-family: Arial, sans-serif;
             line-height: 1.6;
             background-color: #f5f5f5;
             color: #333;
@@ -163,67 +163,98 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>智能客服系统</h1>
-            <p>24/7为您服务</p>
+            <h1>AI Customer Service</h1>
+            <p>24/7 Support</p>
         </div>
 
         <div class="chat-container">
             <div class="chat-section">
                 <div id="chatbox"></div>
                 <div class="input-area">
-                    <input type="text" id="userInput" placeholder="请输入您的问题..." onkeypress="if(event.key === 'Enter') sendMessage()">
-                    <button onclick="sendMessage()">发送</button>
+                    <input type="text" id="userInput" placeholder="Type your question..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                    <button onclick="sendMessage()">Send</button>
                 </div>
             </div>
 
             <div class="history-section">
-                <h3>历史问题记录</h3>
+                <h3>Question History</h3>
                 <div id="history"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // 页面加载时获取历史记录
-        window.onload = function() {
-            fetch("/get_history")
+        function loadHistory() {
+            fetch('/support/get_history')
                 .then(response => response.json())
                 .then(data => {
-                    updateHistory(data.history);
+                    if (data.success) {
+                        updateHistory(data.history);
+                    } else {
+                        showError(data.error || "Failed to load history");
+                    }
                 })
                 .catch(error => {
-                    showError("加载历史记录失败：" + error.message);
+                    console.error('Failed to load history:', error);
+                    showError("Failed to load history: " + error.message);
                 });
-        };
+        }
 
         function sendMessage() {
             const userInput = document.getElementById("userInput");
             const message = userInput.value.trim();
             
-            if (!message) return;
+            if (!message) {
+                showError("Please enter a message");
+                return;
+            }
 
+            // Show user message
             appendMessage("user", message);
             userInput.value = "";
 
-            fetch("/chat", {
-                method: "POST",
+            // Send to server
+            fetch('/support/chat', {
+                method: 'POST',
                 headers: {
-                    "Content-Type": "application/json"
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ message: message })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
-                if (data.error) {
-                    showError(data.error);
-                } else {
+                if (data.success) {
                     appendMessage("bot", data.response);
                     updateHistory(data.history);
+                } else {
+                    showError(data.error || "Failed to send message");
                 }
             })
             .catch(error => {
-                showError("发送消息失败：" + error.message);
+                console.error('Failed to send message:', error);
+                showError("Failed to send message: " + error.message);
             });
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "error-message";
+            errorDiv.textContent = message;
+            
+            const chatbox = document.getElementById("chatbox");
+            chatbox.appendChild(errorDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            
+            // Remove error message after 3 seconds
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 3000);
         }
 
         function appendMessage(type, content) {
@@ -240,7 +271,7 @@
             historyDiv.innerHTML = "";
             
             if (Array.isArray(history)) {
-                history.forEach((item, index) => {
+                history.forEach(item => {
                     const historyItem = document.createElement("div");
                     historyItem.className = "history-item";
                     
@@ -248,8 +279,8 @@
                     const timestamp = item.timestamp || '';
                     
                     historyItem.innerHTML = `
-                        <div><strong>问题 ${index + 1}:</strong> ${question}</div>
-                        ${timestamp ? `<div class="timestamp">${timestamp}</div>` : ''}
+                        <div class="question">${question}</div>
+                        <div class="timestamp">${timestamp}</div>
                     `;
                     
                     historyDiv.appendChild(historyItem);
@@ -257,14 +288,16 @@
             }
         }
 
-        function showError(message) {
-            const chatbox = document.getElementById("chatbox");
-            const errorDiv = document.createElement("div");
-            errorDiv.className = "error-message";
-            errorDiv.textContent = message;
-            chatbox.appendChild(errorDiv);
-            chatbox.scrollTop = chatbox.scrollHeight;
-        }
+        // Load history when page loads
+        document.addEventListener('DOMContentLoaded', loadHistory);
+
+        // Listen for Enter key
+        document.getElementById("userInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
     </script>
 </body>
 </html>

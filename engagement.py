@@ -1,30 +1,42 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Blueprint, request, jsonify, render_template, session
+from flask_login import login_required
 import requests
 import os
 from functools import lru_cache, wraps
 from datetime import datetime, timedelta
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
+import time
+import json
 
 load_dotenv()
 
-app = Flask(__name__)
+engagement_bp = Blueprint('engagement_bp', __name__)
 
-# 添加速率限制
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
-
-# 配置
+# Configuration
 class Config:
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-    CACHE_TIMEOUT = 300  # 缓存时间5分钟
+    CACHE_TIMEOUT = 300  # Cache timeout in minutes
+    REQUEST_TIMEOUT = 30  # Request timeout in seconds
+    MAX_RETRIES = 3      # Maximum retry attempts
+    RETRY_DELAY = 2      # Retry delay in seconds
+    
+    # Proxy settings (if needed)
+    HTTP_PROXY = os.environ.get("HTTP_PROXY")
+    HTTPS_PROXY = os.environ.get("HTTPS_PROXY")
 
-# 统一的响应格式
+# Check API key
+if not Config.GEMINI_API_KEY:
+    print("Warning: GEMINI_API_KEY environment variable not set")
+
+# Proxy settings
+proxies = {}
+if Config.HTTP_PROXY:
+    proxies['http'] = Config.HTTP_PROXY
+if Config.HTTPS_PROXY:
+    proxies['https'] = Config.HTTPS_PROXY
+
+# Unified response format
 def make_response(success=True, data=None, message=None, status_code=200):
     response = {
         "success": success,
@@ -34,13 +46,29 @@ def make_response(success=True, data=None, message=None, status_code=200):
     }
     return jsonify(response), status_code
 
-# 添加缓存装饰器
-@lru_cache(maxsize=128)
+# Add retry decorator
+def retry_on_failure(max_retries=3, delay=1):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    if retries == max_retries:
+                        raise e
+                    time.sleep(delay)
+            return None
+        return wrapper
+    return decorator
+
+@retry_on_failure(max_retries=Config.MAX_RETRIES, delay=Config.RETRY_DELAY)
 def get_gemini_response(prompt):
-    """调用 Google Gemini API 获取响应"""
+    """Get response from Google Gemini API"""
     if not Config.GEMINI_API_KEY:
-        app.logger.error("Missing Gemini API key in environment variables")
-        return "系统配置错误：缺少 API 密钥，请联系管理员"
+        raise ValueError("System configuration error: Missing API key, please contact administrator")
         
     try:
         payload = {
@@ -51,133 +79,188 @@ def get_gemini_response(prompt):
             }]
         }
         headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
         
         url = f"{Config.GEMINI_API_URL}?key={Config.GEMINI_API_KEY}"
-        response = requests.post(
-            url, 
-            json=payload, 
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
         
-        result = response.json()
-        if 'candidates' in result and result['candidates']:
-            return result['candidates'][0]['content']['parts'][0]['text']
-        return "AI 未能生成有效回复"
-        
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Gemini API 请求失败: {str(e)}")
-        return "AI 服务暂时不可用，请稍后再试"
+        # Send request
+        try:
+            print(f"Sending request to Gemini API...")  # Debug log
+            response = requests.post(
+                url, 
+                json=payload, 
+                headers=headers, 
+                timeout=Config.REQUEST_TIMEOUT,
+                proxies=proxies if proxies else None,
+                verify=True  # SSL verification
+            )
+            print(f"Received response, status code: {response.status_code}")  # Debug log
+            
+            # Check response status code
+            response.raise_for_status()
+            
+            # Check response Content-Type
+            content_type = response.headers.get('Content-Type', '')
+            if 'application/json' not in content_type:
+                print(f"Invalid Content-Type: {content_type}")  # Debug log
+                raise ValueError(f"API returned non-JSON response: {content_type}")
+            
+            # Try to parse JSON
+            try:
+                result = response.json()
+                print("Successfully parsed JSON response")  # Debug log
+            except ValueError as e:
+                print(f"JSON parsing error: {str(e)}")  # Debug log
+                raise ValueError(f"Unable to parse API response as JSON: {str(e)}")
+            
+            # Validate response structure
+            if not isinstance(result, dict):
+                raise ValueError("Invalid API response format")
+                
+            if 'candidates' not in result or not result['candidates']:
+                print(f"Response missing required fields: {result}")  # Debug log
+                raise ValueError("API response missing required data fields")
+                
+            if not result['candidates'][0].get('content', {}).get('parts', []):
+                raise ValueError("API response missing text content")
+            
+            response_text = result['candidates'][0]['content']['parts'][0]['text']
+            print("Successfully retrieved response text")  # Debug log
+            return response_text
+            
+        except requests.exceptions.Timeout:
+            print("Request timeout")  # Debug log
+            raise ConnectionError("API request timeout, please try again later")
+        except requests.exceptions.RequestException as e:
+            print(f"Request exception: {str(e)}")  # Debug log
+            raise ConnectionError(f"API request failed: {str(e)}")
+            
     except Exception as e:
-        app.logger.error(f"处理请求时出错: {str(e)}")
-        return "处理请求时发生错误"
+        print(f"Gemini API error: {str(e)}")  # Debug log
+        raise Exception(f"Error processing request: {str(e)}")
 
-@app.route('/profile/questions', methods=['GET'])
-@limiter.limit("10/minute")
+@engagement_bp.route('/')
+@login_required
+def index():
+    """Render main page"""
+    return render_template('engagement.html')
+
+@engagement_bp.route('/profile/questions', methods=['GET'])
+@login_required
 def get_profile_questions():
-    """获取用户画像问题列表"""
+    """Get user profile questions list"""
     try:
         questions = [
-            "请问您的年龄是多少？",
-            "您的职业是？",
-            "您的月收入是多少？",
-            "您的月支出是多少？",
-            "您的资产状况（例如存款、房产等）如何？",
-            "您的风险偏好是保守、稳健还是激进？"
+            "What is your age?",
+            "What is your occupation?",
+            "What is your monthly income?",
+            "What are your monthly expenses?",
+            "What is your asset status (e.g., savings, real estate)?",
+            "What is your risk preference (conservative, moderate, or aggressive)?"
         ]
         return make_response(data={"questions": questions})
     except Exception as e:
         return make_response(success=False, message=str(e), status_code=500)
 
-@app.route('/profile', methods=['POST'])
-@limiter.limit("10/minute")
+@engagement_bp.route('/profile', methods=['POST'])
+@login_required
 def analyze_profile():
-    """分析用户画像"""
+    """Analyze user profile"""
     try:
         data = request.get_json()
-        app.logger.info(f"Received profile data: {data}")
-        
         if not data:
-            app.logger.error("Missing request data")
-            return make_response(success=False, message="Missing request data", status_code=400)
-            
-        required_fields = ['age', 'occupation', 'monthly_income', 'monthly_expenses', 'assets', 'risk_preference']
-        missing_fields = [field for field in required_fields if field not in data]
-        if missing_fields:
-            app.logger.error(f"Missing fields in request: {missing_fields}")
             return make_response(
                 success=False, 
-                message=f"Missing required fields: {', '.join(missing_fields)}", 
+                message="Request data is empty, please provide user information", 
+                status_code=400
+            )
+            
+        required_fields = ['age', 'occupation', 'monthly_income', 'monthly_expenses', 'assets', 'risk_preference']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        if missing_fields:
+            return make_response(
+                success=False, 
+                message=f"Missing required information: {', '.join(missing_fields)}", 
                 status_code=400
             )
 
-        prompt = "作为一个专业的理财顾问，请根据以下用户信息进行分析，建立用户画像，并提出个性化理财建议：\n"
+        # Build detailed prompt
+        prompt = """As a professional financial advisor, please provide a comprehensive user profile analysis and personalized financial advice based on the following information.
+Please analyze from these aspects:
+
+1. Basic Financial Status Analysis
+2. Income and Expense Structure Assessment
+3. Risk Tolerance Assessment
+4. Investment Recommendations
+5. Financial Goal Planning
+6. Risk Warnings
+
+User Information:
+"""
         for field in required_fields:
             prompt += f"{field}: {data.get(field, '')}\n"
         
-        app.logger.info(f"Sending prompt to Gemini: {prompt}")
-        analysis = get_gemini_response(prompt)
-        app.logger.info(f"Received analysis from Gemini: {analysis}")
-        
-        return make_response(data={"analysis": analysis})
+        try:
+            analysis = get_gemini_response(prompt)
+            if not analysis:
+                return make_response(
+                    success=False,
+                    message="Unable to generate analysis, please try again later",
+                    status_code=503
+                )
+
+            # Save user profile to session
+            session['user_profile'] = {
+                'analysis': analysis,
+                'raw_data': data,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            return make_response(
+                success=True,
+                data={
+                    "analysis": analysis,
+                    "profile_data": data,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            
+        except (ConnectionError, ValueError) as e:
+            print(f"Analysis generation error: {str(e)}")
+            return make_response(
+                success=False,
+                message=f"Failed to generate analysis: {str(e)}",
+                status_code=503
+            )
         
     except Exception as e:
-        app.logger.error(f"Error in analyze_profile: {str(e)}")
-        return make_response(success=False, message=str(e), status_code=500)
+        print(f"Request processing error: {str(e)}")
+        return make_response(
+            success=False, 
+            message=f"Error processing request: {str(e)}", 
+            status_code=500
+        )
 
-@app.route('/financial_advice', methods=['POST'])
+@engagement_bp.route('/financial_advice', methods=['POST'])
+@login_required
 def financial_advice():
-    """
-    根据用户收支、资产和风险偏好信息，利用 AI 技术生成量身定制的理财建议
-    """
+    """Generate personalized financial advice"""
     data = request.json
-    prompt = "根据以下财务数据生成个性化的理财建议：\n"
-    prompt += f"收入：{data.get('income', '')}\n"
-    prompt += f"支出：{data.get('expenses', '')}\n"
-    prompt += f"资产：{data.get('assets', '')}\n"
-    prompt += f"风险偏好：{data.get('risk_profile', '')}\n"
+    prompt = "Generate personalized financial advice based on the following data:\n"
+    prompt += f"Income: {data.get('income', '')}\n"
+    prompt += f"Expenses: {data.get('expenses', '')}\n"
+    prompt += f"Assets: {data.get('assets', '')}\n"
+    prompt += f"Risk Profile: {data.get('risk_profile', '')}\n"
     
     ai_response = get_gemini_response(prompt)
-    return jsonify({"financial_advice": ai_response})
+    return make_response(data={"financial_advice": ai_response})
 
-@app.route('/')
-def index():
-    """渲染主页面"""
-    return render_template('engagement.html')
-
-def get_financial_news():
-    """Fetch financial news using Alpha Vantage API."""
-    try:
-        url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={Config.GEMINI_API_KEY}'
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if 'feed' in data:
-            return data['feed'][:5]  # Return top 5 news articles
-        return None
-    except Exception as e:
-        app.logger.error(f"获取新闻失败: {str(e)}")
-        return None
-
-# 添加错误处理装饰器
-def handle_errors(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            app.logger.error(f"Error in {f.__name__}: {str(e)}")
-            return make_response(success=False, message=str(e), status_code=500)
-    return decorated_function
-
-@app.route('/chat', methods=['POST'])
-@handle_errors
-@limiter.limit("20/minute")
+@engagement_bp.route('/chat', methods=['POST'])
+@login_required
 def chat():
-    """处理聊天请求"""
+    """Handle chat requests"""
     data = request.get_json()
     if not data or 'message' not in data:
         return make_response(success=False, message="Missing message", status_code=400)
@@ -185,75 +268,148 @@ def chat():
     message = data['message']
     conversation_history = data.get('conversation_history', '')
     
-    response = get_gemini_response(conversation_history + "\n用户：" + message)
+    response = get_gemini_response(conversation_history + "\nUser: " + message)
     return make_response(data={"response": response})
 
-@app.route('/custom_plan', methods=['POST'])
+@engagement_bp.route('/custom_plan', methods=['POST'])
+@login_required
 def custom_plan():
-    """
-    用户可设定短期或长期财务目标，通过 AI 分析生成达成目标所需的理财方案和风险提示
-    """
+    """Generate personalized financial plan"""
     data = request.json
-    prompt = "用户设定了以下财务目标，请根据其当前财务状况提出合理的达成计划和风险提示：\n"
-    prompt += f"目标类型：{data.get('goal_type', '')}\n"
-    prompt += f"目标金额：{data.get('target_amount', '')}\n"
-    prompt += f"时间范围：{data.get('time_horizon', '')}\n"
+    prompt = "Based on the following financial goals and current financial status, please provide a reasonable achievement plan and risk warnings:\n"
+    prompt += f"Goal Type: {data.get('goal_type', '')}\n"
+    prompt += f"Target Amount: {data.get('target_amount', '')}\n"
+    prompt += f"Time Horizon: {data.get('time_horizon', '')}\n"
     
     current_finance = data.get("current_finance", {})
     if current_finance:
-        prompt += ("当前财务状况："
-                   f"收入 {current_finance.get('income', '')}, "
-                   f"支出 {current_finance.get('expenses', '')}, "
-                   f"资产 {current_finance.get('assets', '')}, "
-                   f"风险偏好 {current_finance.get('risk_profile', '')}\n")
+        prompt += ("Current Financial Status: "
+                   f"Income {current_finance.get('income', '')}, "
+                   f"Expenses {current_finance.get('expenses', '')}, "
+                   f"Assets {current_finance.get('assets', '')}, "
+                   f"Risk Profile {current_finance.get('risk_profile', '')}\n")
     
     ai_response = get_gemini_response(prompt)
-    return jsonify({"custom_plan": ai_response})
+    return make_response(data={"custom_plan": ai_response})
 
-@app.route('/simulation', methods=['POST'])
+@engagement_bp.route('/simulation', methods=['POST'])
+@login_required
 def simulation():
-    """
-    提供预算模拟、投资回报率计算等工具，帮助用户直观了解不同方案的效果，生成模拟预测报告
-    """
-    data = request.json
+    """Generate personalized investment simulation and advice based on user profile"""
     try:
-        initial_amount = float(data.get("initial_amount", 0))
-        annual_rate = float(data.get("annual_rate", 0))
-        years = int(data.get("years", 0))
-    except ValueError:
-        return jsonify({"error": "无效的数值参数"}), 400
-    
-    future_value = initial_amount * ((1 + annual_rate/100) ** years)
-    prompt = (f"用户输入模拟参数：初始金额 {initial_amount}, 年利率 {annual_rate}%, 投资年限 {years}年。\n"
-              f"请生成详细的模拟和预测报告，并说明预计未来金额为 {future_value:.2f}。")
-    
-    ai_response = get_gemini_response(prompt)
-    return jsonify({
-        "calculated_future_value": future_value,
-        "simulation_report": ai_response
-    })
+        data = request.json
+        # Validate basic parameters
+        required_fields = ["initial_amount", "annual_rate", "years"]
+        if not all(field in data for field in required_fields):
+            return make_response(
+                success=False,
+                message="Missing required parameters: investment amount, expected return rate, and investment period",
+                status_code=400
+            )
 
-@app.route('/update_advice', methods=['POST'])
+        # Get parameters
+        initial_amount = float(data["initial_amount"])
+        annual_rate = float(data["annual_rate"])
+        years = int(data["years"])
+
+        # Get user profile
+        user_profile = session.get('user_profile', {}).get('raw_data', {})
+        if not user_profile:
+            return make_response(
+                success=False,
+                message="Please complete personal profile analysis first",
+                status_code=400
+            )
+
+        # Basic return calculation
+        future_value = initial_amount * ((1 + annual_rate/100) ** years)
+        monthly_investment = initial_amount / (12 * years) if years > 0 else 0
+
+        # Generate investment advice prompt
+        prompt = f"""As a professional investment advisor, please create a detailed investment plan based on the following user information and investment parameters:
+
+User Profile Information:
+- Age: {user_profile.get('age', 'Unknown')}
+- Occupation: {user_profile.get('occupation', 'Unknown')}
+- Monthly Income: {user_profile.get('monthly_income', 'Unknown')}
+- Monthly Expenses: {user_profile.get('monthly_expenses', 'Unknown')}
+- Asset Status: {user_profile.get('assets', 'Unknown')}
+- Risk Preference: {user_profile.get('risk_preference', 'Unknown')}
+
+Investment Parameters:
+- Planned Investment Amount: ${initial_amount:,.2f}
+- Expected Annual Return Rate: {annual_rate}%
+- Investment Period: {years} years
+- Monthly Average Investment: ${monthly_investment:,.2f}
+- Expected Final Amount: ${future_value:,.2f}
+
+Please provide the following detailed advice:
+1. Investment Portfolio Allocation (based on user risk preference)
+2. Specific Investment Product Recommendations and Ratios
+3. Phased Investment Plan
+4. Risk Control Measures
+5. Regular Adjustment Suggestions
+6. Market Volatility Response Strategies
+7. Tax and Fee Considerations
+8. Investment Goal Key Milestones
+9. Emergency Fund Arrangements
+10. Regular Review and Adjustment Plan
+
+Please ensure the advice fully aligns with the user's risk tolerance and financial status."""
+
+        try:
+            # Get AI advice
+            investment_advice = get_gemini_response(prompt)
+            if not investment_advice:
+                raise ValueError("Unable to generate investment advice")
+
+            # Build complete investment plan
+            investment_plan = {
+                "initial_investment": initial_amount,
+                "annual_return_rate": annual_rate,
+                "investment_period": years,
+                "monthly_investment": monthly_investment,
+                "projected_final_amount": future_value,
+                "user_profile_summary": {
+                    "age": user_profile.get('age'),
+                    "risk_preference": user_profile.get('risk_preference'),
+                    "monthly_income": user_profile.get('monthly_income')
+                },
+                "detailed_plan": investment_advice
+            }
+
+            return make_response(data=investment_plan)
+
+        except Exception as e:
+            print(f"Error generating investment advice: {str(e)}")
+            return make_response(
+                success=False,
+                message="Failed to generate investment advice, please try again later",
+                status_code=503
+            )
+
+    except ValueError as e:
+        return make_response(
+            success=False,
+            message="Parameter format error: Please ensure the amount, return rate, and period are valid numbers",
+            status_code=400
+        )
+    except Exception as e:
+        print(f"Request processing error: {str(e)}")
+        return make_response(
+            success=False,
+            message="Error processing request, please try again later",
+            status_code=500
+        )
+
+@engagement_bp.route('/update_advice', methods=['POST'])
+@login_required
 def update_advice():
-    """
-    基于用户最新输入的信息和实时市场数据，动态调整并优化理财建议
-    """
+    """Update financial advice"""
     data = request.json
-    prompt = "请根据以下最新信息和实时市场数据更新理财建议：\n"
+    prompt = "Please update the financial advice based on the following latest information and real-time market data:\n"
     for key, value in data.items():
         prompt += f"{key}: {value}\n"
     
     ai_response = get_gemini_response(prompt)
-    return jsonify({"updated_advice": ai_response})
-
-@app.errorhandler(429)
-def ratelimit_handler(e):
-    return make_response(success=False, message="请求过于频繁，请稍后再试", status_code=429)
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    app.logger.error(f"Unhandled exception: {str(e)}")
-    return make_response(success=False, message="服务器内部错误", status_code=500)
-
-if __name__ == '__main__':
-    app.run(debug=os.environ.get("FLASK_DEBUG", False), port=5000)
+    return make_response(data={"updated_advice": ai_response})

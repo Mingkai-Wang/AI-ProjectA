@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Services System - Home</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .menu-item {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .menu-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .menu-item h2 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+        }
+        
+        .menu-item p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .menu-item.logout {
+            background-color: #e74c3c;
+        }
+        
+        .menu-item.logout h2,
+        .menu-item.logout p {
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .menu-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Financial Services System</h1>
+            <p>Welcome to our services</p>
+        </div>
+        
+        <div class="menu-grid">
+            <a href="{{ url_for('engagement_bp.index') }}" class="menu-item">
+                <h2>Client Engagement</h2>
+                <p>AI Financial Advisor & Personalized Services</p>
+            </a>
+            
+            <a href="{{ url_for('support_bp.index') }}" class="menu-item">
+                <h2>Customer Support</h2>
+                <p>24/7 AI Support System</p>
+            </a>
+            
+            <a href="{{ url_for('dashboard_bp.index') }}" class="menu-item">
+                <h2>Data Analytics</h2>
+                <p>Real-time Market Data & Analysis Reports</p>
+            </a>
+            
+            <a href="{{ url_for('logout') }}" class="menu-item logout">
+                <h2>Logout</h2>
+                <p>Exit System</p>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
