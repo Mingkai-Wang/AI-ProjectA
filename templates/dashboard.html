@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .stock-prices, .news {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .news-item {
+            margin-bottom: 10px;
+        }
+        .loading {
+            opacity: 0.5;
+        }
+        .error-message {
+            color: red;
+            padding: 10px;
+            border: 1px solid red;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Bank Dashboard</h1>
+        <div id="error-container"></div>
+        <div class="stock-prices">
+            <h2>Real-Time Stock Prices</h2>
+            <ul id="stock-prices"></ul>
+        </div>
+        <div class="news">
+            <h2>Financial News</h2>
+            <div id="news"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const dashboard = document.querySelector('.dashboard');
+        const errorContainer = document.getElementById('error-container');
+
+        // 自动每30秒更新一次
+        setInterval(() => {
+            socket.emit('request_update');
+        }, 30000);
+
+        // Request initial update
+        socket.emit('request_update');
+        dashboard.classList.add('loading');
+
+        socket.on('update_data', function(data) {
+            dashboard.classList.remove('loading');
+            errorContainer.innerHTML = '';
+
+            if (data.status === 'error') {
+                errorContainer.innerHTML = `
+                    <div class="error-message">
+                        Error: ${data.message}
+                    </div>
+                `;
+                return;
+            }
+
+            // Update stock prices
+            const stockPrices = document.getElementById('stock-prices');
+            stockPrices.innerHTML = '';
+            for (const [symbol, price] of Object.entries(data.stock_prices)) {
+                const li = document.createElement('li');
+                li.textContent = `${symbol}: $${price}`;
+                stockPrices.appendChild(li);
+            }
+
+            // Update news
+            const news = document.getElementById('news');
+            news.innerHTML = '';
+            data.news.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'news-item';
+                div.innerHTML = `<strong>${item.title}</strong><br>${item.summary}`;
+                news.appendChild(div);
+            });
+        });
+
+        socket.on('connect_error', function(error) {
+            dashboard.classList.remove('loading');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    Connection error: ${error.message}
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>

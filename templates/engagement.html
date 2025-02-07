@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能理财助手</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+
+        .ai-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+
+        .analysis-content {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI 智能理财助手</h1>
+
+        <!-- 用户画像部分 -->
+        <div class="section" id="profile-section">
+            <h2>个人画像分析</h2>
+            <div id="questions-container"></div>
+            <form id="profile-form">
+                <div class="form-group">
+                    <label for="age">年龄</label>
+                    <input type="number" id="age" name="age" required>
+                </div>
+                <div class="form-group">
+                    <label for="occupation">职业</label>
+                    <input type="text" id="occupation" name="occupation" required>
+                </div>
+                <div class="form-group">
+                    <label for="monthly_income">月收入</label>
+                    <input type="number" id="monthly_income" name="monthly_income" required>
+                </div>
+                <div class="form-group">
+                    <label for="monthly_expenses">月支出</label>
+                    <input type="number" id="monthly_expenses" name="monthly_expenses" required>
+                </div>
+                <div class="form-group">
+                    <label for="assets">资产状况</label>
+                    <textarea id="assets" name="assets" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="risk_preference">风险偏好</label>
+                    <textarea id="risk_preference" name="risk_preference" 
+                        placeholder="请详细描述您的投资风险承受能力，例如：对于亏损的态度、期望的收益率、投资经验等" 
+                        required></textarea>
+                </div>
+                <button type="submit">生成分析</button>
+            </form>
+            <div class="loading" id="profile-loading">分析中...</div>
+            <div class="response" id="profile-response"></div>
+        </div>
+
+        <!-- AI 对话部分 -->
+        <div class="section">
+            <h2>智能咨询</h2>
+            <div class="form-group">
+                <label for="chat-input">请输入您的问题：</label>
+                <textarea id="chat-input" rows="3"></textarea>
+            </div>
+            <button onclick="sendMessage()">发送</button>
+            <div class="loading" id="chat-loading">AI思考中...</div>
+            <div class="response" id="chat-response"></div>
+        </div>
+
+        <!-- 理财方案模拟 -->
+        <div class="section">
+            <h2>投资收益模拟</h2>
+            <form id="simulation-form">
+                <div class="form-group">
+                    <label for="initial_amount">初始投资金额</label>
+                    <input type="number" id="initial_amount" name="initial_amount" required>
+                </div>
+                <div class="form-group">
+                    <label for="annual_rate">预期年化收益率(%)</label>
+                    <input type="number" id="annual_rate" name="annual_rate" step="0.1" required>
+                </div>
+                <div class="form-group">
+                    <label for="years">投资年限</label>
+                    <input type="number" id="years" name="years" required>
+                </div>
+                <button type="submit">计算模拟</button>
+            </form>
+            <div class="loading" id="simulation-loading">计算分析中...</div>
+            <div class="response" id="simulation-response"></div>
+        </div>
+    </div>
+
+    <script>
+        // 通用函数：显示加载状态
+        function showLoading(loadingId) {
+            document.getElementById(loadingId).style.display = 'block';
+        }
+
+        // 通用函数：隐藏加载状态
+        function hideLoading(loadingId) {
+            document.getElementById(loadingId).style.display = 'none';
+        }
+
+        // 通用函数：处理API请求
+        async function makeRequest(url, data, loadingId, responseId) {
+            showLoading(loadingId);
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || '请求失败');
+                }
+                
+                formatResponse(result.data, responseId);
+            } catch (error) {
+                document.getElementById(responseId).innerHTML = 
+                    `<div class="error">错误：${error.message}</div>`;
+            } finally {
+                hideLoading(loadingId);
+            }
+        }
+
+        // 获取用户画像问题
+        async function getProfileQuestions() {
+            try {
+                const response = await fetch('/profile/questions');
+                const result = await response.json();
+                if (result.success && result.data.questions) {
+                    const container = document.getElementById('questions-container');
+                    container.innerHTML = '<h3>请回答以下问题：</h3>' + 
+                        result.data.questions.map(q => `<p>${q}</p>`).join('');
+                }
+            } catch (error) {
+                console.error('获取问题失败：', error);
+            }
+        }
+
+        // 优化响应展示格式
+        function formatResponse(data, responseId) {
+            const container = document.getElementById(responseId);
+            
+            if (responseId === 'chat-response') {
+                // 聊天消息格式化
+                const message = document.createElement('div');
+                message.className = 'chat-message ai-message';
+                message.textContent = data.response;
+                container.appendChild(message);
+                container.scrollTop = container.scrollHeight;
+            } else {
+                // 其他响应格式化
+                container.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            }
+        }
+
+        // 添加输入验证
+        function validateForm(formData) {
+            const errors = [];
+            
+            if (formData.age && (formData.age < 0 || formData.age > 120)) {
+                errors.push('年龄必须在 0-120 之间');
+            }
+            
+            if (formData.monthly_income && formData.monthly_income < 0) {
+                errors.push('月收入不能为负数');
+            }
+            
+            if (formData.monthly_expenses && formData.monthly_expenses < 0) {
+                errors.push('月支出不能为负数');
+            }
+            
+            return errors;
+        }
+
+        // 修改表单提交处理
+        document.getElementById('profile-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            
+            // 添加数据类型转换
+            data.age = parseInt(data.age);
+            data.monthly_income = parseFloat(data.monthly_income);
+            data.monthly_expenses = parseFloat(data.monthly_expenses);
+            
+            const errors = validateForm(data);
+            if (errors.length > 0) {
+                document.getElementById('profile-response').innerHTML = 
+                    `<div class="error">${errors.join('<br>')}</div>`;
+                return;
+            }
+            
+            try {
+                showLoading('profile-loading');
+                const response = await fetch('/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || '请求失败');
+                }
+                
+                const responseDiv = document.getElementById('profile-response');
+                responseDiv.innerHTML = `
+                    <h3>分析结果：</h3>
+                    <div class="analysis-content">
+                        ${result.data.analysis.replace(/\n/g, '<br>')}
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById('profile-response').innerHTML = 
+                    `<div class="error">错误：${error.message}</div>`;
+            } finally {
+                hideLoading('profile-loading');
+            }
+        });
+
+        // 发送聊天消息
+        async function sendMessage() {
+            const message = document.getElementById('chat-input').value;
+            if (!message.trim()) return;
+            
+            await makeRequest('/chat', {
+                message: message,
+                conversation_history: document.getElementById('chat-response').textContent
+            }, 'chat-loading', 'chat-response');
+            
+            document.getElementById('chat-input').value = '';
+        }
+
+        // 提交模拟计算表单
+        document.getElementById('simulation-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData.entries());
+            await makeRequest('/simulation', data, 'simulation-loading', 'simulation-response');
+        });
+
+        // 页面加载时获取问题列表
+        document.addEventListener('DOMContentLoaded', getProfileQuestions);
+    </script>
+</body>
+</html>
